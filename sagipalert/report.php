@@ -54,35 +54,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $pageTitle = 'Report Incident';
 require __DIR__ . '/inc/header.php';
 ?>
-<h1>Report an Incident</h1>
+<div class="page-header">
+  <div>
+    <span class="eyebrow">Resident reporting</span>
+    <h1>Report an Incident</h1>
+  </div>
+</div>
 <p class="sub">Provide as much accurate detail as you can. In a life-threatening emergency, also call 911 immediately.</p>
 <?php foreach ($errors as $er): ?><div class="alert alert-error"><?= e($er) ?></div><?php endforeach; ?>
-<form method="post" enctype="multipart/form-data" class="card">
+<form id="report-form" method="post" enctype="multipart/form-data" class="card">
   <?= csrf_field() ?>
-  <div class="row">
-    <div><label>Incident type</label>
-      <select name="incident_type" required><option value="">Select…</option>
-        <?php foreach (cfg('incident_types') as $t): ?><option <?= $v['incident_type'] === $t ? 'selected' : '' ?>><?= e($t) ?></option><?php endforeach; ?>
-      </select></div>
-    <div><label>Date and time of incident</label>
-      <input type="datetime-local" name="incident_datetime" required max="<?= e(date('Y-m-d\TH:i')) ?>" value="<?= e($v['incident_datetime']) ?>"></div>
-  </div>
-  <label>What happened?</label>
-  <textarea name="description" required placeholder="Describe the situation, number of people affected, visible hazards…"><?= e($v['description']) ?></textarea>
-  <div class="row">
-    <div><label>Barangay</label>
-      <select name="barangay" required><option value="">Select…</option>
-        <?php foreach (cfg('barangays') as $b): ?><option <?= $v['barangay'] === $b ? 'selected' : '' ?>><?= e($b) ?></option><?php endforeach; ?>
-      </select></div>
-    <div><label>Street / landmark / address</label><input name="address" required value="<?= e($v['address']) ?>"></div>
-  </div>
-  <div class="row">
-    <div><label>Latitude (optional)</label><input name="latitude" id="lat" inputmode="decimal" value="<?= e($v['latitude']) ?>"></div>
-    <div><label>Longitude (optional)</label><input name="longitude" id="lng" inputmode="decimal" value="<?= e($v['longitude']) ?>"></div>
-  </div>
-  <p><button type="button" class="btn btn-alt btn-sm" onclick="useGPS()">Use my current location</button> <small class="muted" id="gpsmsg"></small></p>
-  <label>Photo / PDF evidence (optional, JPG, PNG or PDF, max 5 MB each)</label>
-  <input type="file" name="evidence[]" multiple accept=".jpg,.jpeg,.png,.pdf">
+  <fieldset class="form-section">
+    <legend>Incident details</legend>
+    <div class="row">
+      <div><label for="incident_type">Incident type</label>
+        <select id="incident_type" name="incident_type" required>
+          <option value="">Select…</option>
+          <?php foreach (cfg('incident_types') as $t): ?><option value="<?= e($t) ?>" <?= $v['incident_type'] === $t ? 'selected' : '' ?>><?= e($t) ?></option><?php endforeach; ?>
+        </select>
+      </div>
+      <div><label for="incident_datetime">Date and time of incident</label>
+        <input id="incident_datetime" type="datetime-local" name="incident_datetime" required max="<?= e(date('Y-m-d\TH:i')) ?>" value="<?= e($v['incident_datetime']) ?>">
+      </div>
+    </div>
+    <label for="description">What happened?</label>
+    <textarea id="description" name="description" required placeholder="Describe the situation, number of people affected, visible hazards, and any immediate danger."><?= e($v['description']) ?></textarea>
+  </fieldset>
+
+  <fieldset class="form-section">
+    <legend>Location</legend>
+    <div class="row">
+      <div><label for="barangay">Barangay</label>
+        <select id="barangay" name="barangay" required>
+          <option value="">Select…</option>
+          <?php foreach (cfg('barangays') as $b): ?><option value="<?= e($b) ?>" <?= $v['barangay'] === $b ? 'selected' : '' ?>><?= e($b) ?></option><?php endforeach; ?>
+        </select>
+      </div>
+      <div><label for="address">Street / landmark / address</label>
+        <input id="address" name="address" required value="<?= e($v['address']) ?>" placeholder="Nearest landmark, street, or house number">
+      </div>
+    </div>
+    <div class="row">
+      <div><label for="lat">Latitude (optional)</label><input id="lat" name="latitude" inputmode="decimal" value="<?= e($v['latitude']) ?>" placeholder="e.g. 10.2844"></div>
+      <div><label for="lng">Longitude (optional)</label><input id="lng" name="longitude" inputmode="decimal" value="<?= e($v['longitude']) ?>" placeholder="e.g. 123.8391"></div>
+    </div>
+    <p class="form-help-row">
+      <button type="button" class="btn btn-alt btn-sm" onclick="useGPS()">Use my current location</button>
+      <small class="muted" id="gpsmsg" aria-live="polite">Optional: allow location access for a faster location entry.</small>
+    </p>
+  </fieldset>
+
+  <fieldset class="form-section">
+    <legend>Evidence</legend>
+    <label for="evidence">Photo / PDF evidence (optional, JPG, PNG or PDF, max 5 MB each)</label>
+    <input id="evidence" type="file" name="evidence[]" multiple accept=".jpg,.jpeg,.png,.pdf">
+  </fieldset>
+
   <p><button class="btn" type="submit">Submit report</button></p>
 </form>
 <script>
@@ -93,8 +120,19 @@ function useGPS(){
   navigator.geolocation.getCurrentPosition(function(p){
     document.getElementById('lat').value=p.coords.latitude.toFixed(7);
     document.getElementById('lng').value=p.coords.longitude.toFixed(7);
-    m.textContent='Location added.';
-  },function(){m.textContent='Could not get your location. You can type it in manually.';});
+    m.textContent='Location added successfully.';
+  },function(){m.textContent='Location access was denied. You can still enter coordinates manually.';});
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+  const form = document.getElementById('report-form');
+  if (!form) return;
+  form.addEventListener('submit', function () {
+    const submit = form.querySelector('button[type="submit"]');
+    if (!submit) return;
+    submit.disabled = true;
+    submit.textContent = 'Submitting…';
+  });
+});
 </script>
 <?php require __DIR__ . '/inc/footer.php'; ?>

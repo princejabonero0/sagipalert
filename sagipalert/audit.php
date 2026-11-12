@@ -24,7 +24,12 @@ $actions = db()->query('SELECT DISTINCT action FROM audit_logs ORDER BY action')
 $pageTitle = 'Audit Trail';
 require __DIR__ . '/inc/header.php';
 ?>
-<h1>Audit Trail</h1>
+<div class="page-header">
+  <div>
+    <span class="eyebrow">Administration</span>
+    <h1>Audit Trail</h1>
+  </div>
+</div>
 <p class="sub">Record of logins, incident activity, assignments, status changes and administrative actions.</p>
 <form method="get" class="toolbar">
   <div><label>Action</label><select name="action"><option value="">All</option>
@@ -32,6 +37,7 @@ require __DIR__ . '/inc/header.php';
   <div><button class="btn">Filter</button></div>
 </form>
 <div class="card">
+<div class="table-wrap">
 <table>
   <tr><th>When</th><th>User</th><th>Action</th><th>Details</th><th>IP</th></tr>
   <?php foreach ($rows as $r): ?>
@@ -39,6 +45,7 @@ require __DIR__ . '/inc/header.php';
     <td><?= e($r['full_name'] ?? '—') ?></td><td><?= e($r['action']) ?></td><td><?= e($r['details']) ?></td><td><?= e($r['ip_address']) ?></td></tr>
   <?php endforeach; ?>
 </table>
+</div>
 <p class="muted">Page <?= $page ?> of <?= $pages ?> (<?= $total ?> entries)
   <?php if ($page > 1): ?> · <a href="?action=<?= urlencode($action) ?>&amp;page=<?= $page - 1 ?>">Previous</a><?php endif; ?>
   <?php if ($page < $pages): ?> · <a href="?action=<?= urlencode($action) ?>&amp;page=<?= $page + 1 ?>">Next</a><?php endif; ?></p>

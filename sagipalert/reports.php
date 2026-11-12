@@ -21,7 +21,6 @@ if (($_GET['export'] ?? '') === 'csv') {
     fwrite($out, "\xEF\xBB\xBF");
     fputcsv($out, ['Reference', 'Type', 'Barangay', 'Address', 'Occurred', 'Status', 'Priority', 'Severity', 'Reporter', 'Reported at', 'Verified at', 'Resolved at', 'Outcome']);
     foreach ($st->fetchAll() as $r) {
-        // Prefix cells that could be read as spreadsheet formulas.
         $r = array_map(fn($c) => is_string($c) && preg_match('/^[=+\-@]/', $c) ? "'" . $c : $c, array_values($r));
         fputcsv($out, $r);
     }
@@ -56,7 +55,12 @@ function mins($m): string {
 $pageTitle = 'Reports';
 require __DIR__ . '/inc/header.php';
 ?>
-<h1>Incident Reports</h1>
+<div class="page-header">
+  <div>
+    <span class="eyebrow">Operations summary</span>
+    <h1>Incident Reports</h1>
+  </div>
+</div>
 <p class="sub">Summary of incidents reported within a date range.</p>
 <form method="get" class="toolbar">
   <div><label>From</label><input type="date" name="from" value="<?= e($from) ?>"></div>
@@ -74,7 +78,7 @@ require __DIR__ . '/inc/header.php';
 <?php foreach ($sections as $title => $rows): ?>
   <div class="card"><h2><?= e($title) ?></h2>
   <?php if (!$rows): ?><p class="muted">No data.</p><?php else: ?>
-    <table><?php foreach ($rows as $r): ?><tr><td><?= e($r['k']) ?></td><td style="width:60px"><b><?= (int)$r['n'] ?></b></td></tr><?php endforeach; ?></table>
+    <div class="table-wrap"><table><?php foreach ($rows as $r): ?><tr><td><?= e($r['k']) ?></td><td style="width:60px"><b><?= (int)$r['n'] ?></b></td></tr><?php endforeach; ?></table></div>
   <?php endif; ?></div>
 <?php endforeach; ?>
 </div>

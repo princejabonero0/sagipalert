@@ -34,8 +34,11 @@ $pageTitle = 'Register';
 require __DIR__ . '/inc/header.php';
 ?>
 <div class="card auth">
-  <h1>Create resident account</h1>
-  <p class="sub">Responder and dispatcher accounts are created by the system administrator.</p>
+  <div class="auth-header">
+    <span class="eyebrow">Create resident account</span>
+    <h1>Register for SagipAlert</h1>
+    <p class="sub">Responder and dispatcher accounts are created by the system administrator.</p>
+  </div>
   <?php foreach ($errors as $er): ?><div class="alert alert-error"><?= e($er) ?></div><?php endforeach; ?>
   <form method="post">
     <?= csrf_field() ?>

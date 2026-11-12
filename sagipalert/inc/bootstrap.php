@@ -3,9 +3,28 @@
 $CONFIG = require __DIR__ . '/../config.php';
 date_default_timezone_set($CONFIG['timezone']);
 
-session_name('sagipalert');
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax']);
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    $cookie = [
+        'lifetime' => (int)($CONFIG['session_lifetime'] ?? 1800),
+        'path' => '/',
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ];
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+        $cookie['secure'] = true;
+    }
+    session_name('sagipalert');
+    session_set_cookie_params($cookie);
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.gc_maxlifetime', (string)($CONFIG['session_lifetime'] ?? 1800));
+    session_start();
+}
+
+header('X-Frame-Options: DENY');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('Permissions-Policy: geolocation=(self), camera=(), microphone=()');
 
 function cfg(string $key) { global $CONFIG; return $CONFIG[$key]; }
 
@@ -107,6 +126,15 @@ function unread_count(int $uid): int {
 
 // ---- Incident helpers ----
 const STATUSES = ['Reported', 'Verified', 'Assigned', 'Responding', 'Resolved', 'Archived', 'Rejected'];
+const STATUS_TRANSITIONS = [
+    'Reported' => ['Verified', 'Rejected'],
+    'Verified' => ['Assigned', 'Rejected'],
+    'Assigned' => ['Responding'],
+    'Responding' => ['Resolved'],
+    'Resolved' => ['Archived'],
+    'Rejected' => [],
+    'Archived' => [],
+];
 
 function set_status(int $incidentId, string $new, int $byUser): void {
     $st = db()->prepare('SELECT status FROM incidents WHERE id = ?');
@@ -117,6 +145,24 @@ function set_status(int $incidentId, string $new, int $byUser): void {
     db()->prepare('INSERT INTO status_history (incident_id, old_status, new_status, changed_by) VALUES (?,?,?,?)')
         ->execute([$incidentId, $old ?: null, $new, $byUser]);
     audit('status_change', "Incident #$incidentId: $old -> $new", $byUser);
+}
+
+function can_transition_status(string $fromStatus, string $toStatus): bool {
+    if ($fromStatus === $toStatus) return true;
+    $allowed = STATUS_TRANSITIONS[$fromStatus] ?? [];
+    return in_array($toStatus, $allowed, true);
+}
+
+function update_incident_status(int $incidentId, string $newStatus, int $byUser): bool {
+    $st = db()->prepare('SELECT status FROM incidents WHERE id = ?');
+    $st->execute([$incidentId]);
+    $old = (string)($st->fetchColumn() ?: '');
+    if ($old === '') return false;
+    if (!can_transition_status($old, $newStatus)) {
+        return false;
+    }
+    set_status($incidentId, $newStatus, $byUser);
+    return true;
 }
 
 function can_view_incident(array $u, array $inc): bool {
@@ -151,4 +197,21 @@ function store_upload(array $file, int $incidentId, int $userId, string $docType
         ->execute([$incidentId, $userId, $docType, mb_substr(basename($file['name']), 0, 255), $stored, $mime, (int)$file['size']]);
     audit('document_upload', "Incident #$incidentId: " . basename($file['name']), $userId);
     return null;
+}
+
+function is_assigned_responder_for_incident(array $u, int $incidentId): bool {
+    if (($u['role'] ?? '') !== 'responder') return false;
+    $st = db()->prepare('SELECT 1 FROM assignments WHERE incident_id = ? AND responder_id = ? LIMIT 1');
+    $st->execute([$incidentId, (int)$u['id']]);
+    return (bool)$st->fetchColumn();
+}
+
+function can_manage_incident_action(array $u, int $incidentId, bool $requireAssignment = false): bool {
+    if (is_staff($u)) return true;
+    if (($u['role'] ?? '') === 'resident') return false;
+    if (($u['role'] ?? '') === 'responder') {
+        if ($requireAssignment && !is_assigned_responder_for_incident($u, $incidentId)) return false;
+        return is_assigned_responder_for_incident($u, $incidentId);
+    }
+    return false;
 }

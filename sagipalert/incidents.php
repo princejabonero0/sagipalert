@@ -29,7 +29,12 @@ $rows = $st->fetchAll();
 $pageTitle = 'Incidents';
 require __DIR__ . '/inc/header.php';
 ?>
-<h1><?= $u['role'] === 'resident' ? 'My Reports' : ($u['role'] === 'responder' ? 'My Assignments' : 'Incidents') ?></h1>
+<div class="page-header">
+  <div>
+    <span class="eyebrow">Records</span>
+    <h1><?= $u['role'] === 'resident' ? 'My Reports' : ($u['role'] === 'responder' ? 'My Assignments' : 'Incidents') ?></h1>
+  </div>
+</div>
 <p class="sub">Search and filter incident records.</p>
 <form method="get" class="toolbar">
   <div><label>Search</label><input name="q" value="<?= e($q) ?>" placeholder="Ref, description, address"></div>
@@ -43,20 +48,22 @@ require __DIR__ . '/inc/header.php';
 </form>
 <div class="card">
 <?php if (!$rows): ?><p class="muted">No incidents match.</p><?php else: ?>
-<table>
-  <tr><th>Ref</th><th>Type</th><th>Location</th><th>Priority</th><th>Status</th><?php if ($u['role'] !== 'resident'): ?><th>Reporter</th><?php endif; ?><th>Reported</th></tr>
-  <?php foreach ($rows as $r): ?>
-  <tr>
-    <td><a href="incident.php?id=<?= (int)$r['id'] ?>"><?= e($r['reference_no']) ?></a></td>
-    <td><?= e($r['incident_type']) ?></td>
-    <td><?= e($r['barangay']) ?><br><small class="muted"><?= e($r['address']) ?></small></td>
-    <td><?= $r['priority'] ? badge($r['priority']) : '<span class="muted">—</span>' ?></td>
-    <td><?= badge($r['status']) ?></td>
-    <?php if ($u['role'] !== 'resident'): ?><td><?= e($r['reporter']) ?></td><?php endif; ?>
-    <td><?= e(date('M j, Y g:i A', strtotime($r['created_at']))) ?></td>
-  </tr>
-  <?php endforeach; ?>
-</table>
+<div class="table-wrap">
+  <table>
+    <tr><th>Ref</th><th>Type</th><th>Location</th><th>Priority</th><th>Status</th><?php if ($u['role'] !== 'resident'): ?><th>Reporter</th><?php endif; ?><th>Reported</th></tr>
+    <?php foreach ($rows as $r): ?>
+    <tr>
+      <td><a href="incident.php?id=<?= (int)$r['id'] ?>"><?= e($r['reference_no']) ?></a></td>
+      <td><?= e($r['incident_type']) ?></td>
+      <td><?= e($r['barangay']) ?><br><small class="muted"><?= e($r['address']) ?></small></td>
+      <td><?= $r['priority'] ? badge($r['priority']) : '<span class="muted">—</span>' ?></td>
+      <td><?= badge($r['status']) ?></td>
+      <?php if ($u['role'] !== 'resident'): ?><td><?= e($r['reporter']) ?></td><?php endif; ?>
+      <td><?= e(date('M j, Y g:i A', strtotime($r['created_at']))) ?></td>
+    </tr>
+    <?php endforeach; ?>
+  </table>
+</div>
 <?php endif; ?>
 </div>
 <?php require __DIR__ . '/inc/footer.php'; ?>

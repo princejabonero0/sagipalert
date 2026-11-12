@@ -95,7 +95,7 @@ require __DIR__ . '/inc/header.php';
           <?php foreach ($roles as $r): ?><option value="<?= $r ?>" <?= $x['role'] === $r ? 'selected' : '' ?>><?= ucfirst($r) ?></option><?php endforeach; ?>
         </select></form>
     </td>
-    <td><?= $x['is_active'] ? badge('Resolved') . ' Active' : badge('Rejected') . ' Disabled' ?></td>
+    <td><?= $x['is_active'] ? badge('Active') : badge('Disabled') ?></td>
     <td>
       <?php if ((int)$x['id'] !== (int)$me['id']): ?>
       <form method="post" class="inline"><?= csrf_field() ?><input type="hidden" name="action" value="toggle"><input type="hidden" name="user_id" value="<?= (int)$x['id'] ?>">

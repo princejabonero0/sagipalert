@@ -27,11 +27,17 @@ $rows = $st->fetchAll();
 $pageTitle = 'Notifications';
 require __DIR__ . '/inc/header.php';
 ?>
-<h1>Notifications</h1>
+<div class="page-header">
+  <div>
+    <span class="eyebrow">Updates</span>
+    <h1>Notifications</h1>
+  </div>
+  <form method="post" class="noprint"><?= csrf_field() ?><input type="hidden" name="action" value="read_all"><button class="btn btn-alt btn-sm">Mark all as read</button></form>
+</div>
 <p class="sub">Updates about incidents you reported, are assigned to, or manage.</p>
-<form method="post" class="noprint"><?= csrf_field() ?><input type="hidden" name="action" value="read_all"><p><button class="btn btn-alt btn-sm">Mark all as read</button></p></form>
 <div class="card">
 <?php if (!$rows): ?><p class="muted">No notifications.</p><?php else: ?>
+<div class="table-wrap">
 <table>
   <?php foreach ($rows as $n): ?>
   <tr class="<?= $n['is_read'] ? '' : 'unread' ?>">
@@ -40,6 +46,7 @@ require __DIR__ . '/inc/header.php';
   </tr>
   <?php endforeach; ?>
 </table>
+</div>
 <?php endif; ?>
 </div>
 <?php require __DIR__ . '/inc/footer.php'; ?>

@@ -34,8 +34,11 @@ $pageTitle = 'Log in';
 require __DIR__ . '/inc/header.php';
 ?>
 <div class="card auth">
-  <h1>Welcome to SagipAlert</h1>
-  <p class="sub">Log in to report or manage emergency incidents in Minglanilla, Cebu.</p>
+  <div class="auth-header">
+    <span class="eyebrow">Emergency reporting portal</span>
+    <h1>Welcome to SagipAlert</h1>
+    <p class="sub">Log in to report or manage emergency incidents in Minglanilla, Cebu.</p>
+  </div>
   <?php if ($error): ?><div class="alert alert-error"><?= e($error) ?></div><?php endif; ?>
   <form method="post" autocomplete="on">
     <?= csrf_field() ?>

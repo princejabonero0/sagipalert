@@ -21,8 +21,13 @@ $back = 'incident.php?id=' . $id;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
-    $action = $_POST['action'] ?? '';
+    $action = trim((string)($_POST['action'] ?? ''));
     $uid = (int)$u['id'];
+
+    if (!in_array($action, ['verify', 'reject', 'assign', 'accept', 'update', 'resolve', 'archive', 'upload'], true)) {
+        http_response_code(400);
+        exit('Invalid action selected.');
+    }
 
     if ($staff && $action === 'verify' && $inc['status'] === 'Reported') {
         $prio = $_POST['priority'] ?? '';
@@ -31,9 +36,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!in_array($prio, ['Low', 'Medium', 'High', 'Critical'], true) || !in_array($sev, ['Minor', 'Moderate', 'Major', 'Catastrophic'], true)) {
             flash('Select a priority and severity.', 'error'); redirect($back);
         }
+        if (!update_incident_status($id, 'Verified', $uid)) {
+            flash('This report cannot be verified in its current status.', 'error'); redirect($back);
+        }
         $pdo->prepare('UPDATE incidents SET priority=?, severity=?, verified_by=?, verified_at=NOW(), verification_notes=? WHERE id=?')
             ->execute([$prio, $sev, $uid, $notes ?: null, $id]);
-        set_status($id, 'Verified', $uid);
         notify((int)$inc['reporter_id'], "Your report {$inc['reference_no']} was verified (priority: $prio).", $id);
         flash('Incident verified and classified.');
         redirect($back);
@@ -42,8 +49,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($staff && $action === 'reject' && $inc['status'] === 'Reported') {
         $notes = trim($_POST['notes'] ?? '');
         if ($notes === '') { flash('Please enter a reason for rejecting the report.', 'error'); redirect($back); }
+        if (!update_incident_status($id, 'Rejected', $uid)) {
+            flash('This report cannot be rejected in its current status.', 'error'); redirect($back);
+        }
         $pdo->prepare('UPDATE incidents SET verified_by=?, verified_at=NOW(), verification_notes=? WHERE id=?')->execute([$uid, $notes, $id]);
-        set_status($id, 'Rejected', $uid);
         notify((int)$inc['reporter_id'], "Your report {$inc['reference_no']} could not be verified: $notes", $id);
         flash('Report rejected.');
         redirect($back);
@@ -59,10 +68,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $dup = $pdo->prepare('SELECT 1 FROM assignments WHERE incident_id = ? AND responder_id = ?');
         $dup->execute([$id, $rid]);
         if ($dup->fetchColumn()) { flash('That responder is already assigned.', 'error'); redirect($back); }
+        if ($inc['status'] === 'Verified' && !update_incident_status($id, 'Assigned', $uid)) {
+            flash('This incident cannot be assigned in its current status.', 'error'); redirect($back);
+        }
         $pdo->prepare('INSERT INTO assignments (incident_id, responder_id, assigned_by, instructions) VALUES (?,?,?,?)')
             ->execute([$id, $rid, $uid, $instr ?: null]);
         audit('assign_responder', "Incident #$id assigned to $rname", $uid);
-        if ($inc['status'] === 'Verified') set_status($id, 'Assigned', $uid);
         notify($rid, "You were assigned to {$inc['incident_type']} incident {$inc['reference_no']} in {$inc['barangay']}.", $id);
         notify((int)$inc['reporter_id'], "A responder has been assigned to your report {$inc['reference_no']}.", $id);
         flash("Assigned $rname.");
@@ -70,9 +81,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($isResponder && $action === 'accept' && in_array($inc['status'], ['Assigned', 'Responding'], true)) {
+        if (!can_manage_incident_action($u, $id, true)) {
+            http_response_code(403);
+            exit('You are not assigned to this incident.');
+        }
         $pdo->prepare('UPDATE assignments SET accepted_at = COALESCE(accepted_at, NOW()) WHERE incident_id = ? AND responder_id = ?')->execute([$id, $uid]);
         if ($inc['status'] === 'Assigned') {
-            set_status($id, 'Responding', $uid);
+            if (!update_incident_status($id, 'Responding', $uid)) {
+                flash('This incident cannot transition to Responding in its current status.', 'error'); redirect($back);
+            }
             notify((int)$inc['reporter_id'], "Responders are on the way for your report {$inc['reference_no']}.", $id);
             notify_role(['dispatcher'], "{$u['full_name']} is responding to {$inc['reference_no']}.", $id);
         }
@@ -82,6 +99,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (($staff || $isResponder) && $action === 'update' && in_array($inc['status'], ['Assigned', 'Responding', 'Verified'], true)) {
+        if ($isResponder && !can_manage_incident_action($u, $id, true)) {
+            http_response_code(403);
+            exit('You are not assigned to this incident.');
+        }
         $note = trim($_POST['note'] ?? '');
         if ($note === '') { flash('Enter an update note.', 'error'); redirect($back); }
         $pdo->prepare('INSERT INTO response_updates (incident_id, user_id, note) VALUES (?,?,?)')->execute([$id, $uid, $note]);
@@ -92,11 +113,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (($staff || $isResponder) && $action === 'resolve' && in_array($inc['status'], ['Assigned', 'Responding'], true)) {
+        if ($isResponder && !can_manage_incident_action($u, $id, true)) {
+            http_response_code(403);
+            exit('You are not assigned to this incident.');
+        }
         $outcome = trim($_POST['outcome'] ?? '');
         if (mb_strlen($outcome) < 5) { flash('Describe the outcome before resolving.', 'error'); redirect($back); }
+        if (!update_incident_status($id, 'Resolved', $uid)) {
+            flash('This incident cannot be resolved in its current status.', 'error'); redirect($back);
+        }
         $pdo->prepare('UPDATE incidents SET outcome = ?, resolved_at = NOW() WHERE id = ?')->execute([$outcome, $id]);
         $pdo->prepare('UPDATE assignments SET completed_at = NOW() WHERE incident_id = ? AND completed_at IS NULL')->execute([$id]);
-        set_status($id, 'Resolved', $uid);
         notify((int)$inc['reporter_id'], "Your report {$inc['reference_no']} has been resolved.", $id);
         notify_role(['dispatcher'], "{$inc['reference_no']} was marked Resolved by {$u['full_name']}.", $id);
         flash('Incident marked as Resolved.');
@@ -104,7 +131,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($staff && $action === 'archive' && $inc['status'] === 'Resolved') {
-        set_status($id, 'Archived', $uid);
+        if (!update_incident_status($id, 'Archived', $uid)) {
+            flash('This incident cannot be archived in its current status.', 'error'); redirect($back);
+        }
         flash('Incident archived.');
         redirect($back);
     }
@@ -112,6 +141,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'upload') {
         $allowedUpload = $staff || $isResponder || ($isOwner && in_array($inc['status'], ['Reported', 'Verified', 'Assigned', 'Responding'], true));
         if ($allowedUpload) {
+            if ($isResponder && !can_manage_incident_action($u, $id, true)) {
+                http_response_code(403);
+                exit('You are not assigned to this incident.');
+            }
             $type = ($staff || $isResponder) && ($_POST['doc_type'] ?? '') === 'Official Document' ? 'Official Document' : 'Evidence';
             $err = store_upload($_FILES['file'] ?? ['error' => UPLOAD_ERR_NO_FILE], $id, $uid, $type);
             flash($err ?: 'File uploaded.', $err ? 'error' : 'success');

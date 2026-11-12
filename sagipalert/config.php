@@ -7,6 +7,7 @@ return [
     'db_pass' => '',
     'app_name' => 'SagipAlert',
     'timezone' => 'Asia/Manila',
+    'session_lifetime' => 1800,
     'max_upload_bytes' => 5 * 1024 * 1024, // 5 MB per file
     'allowed_ext' => ['jpg', 'jpeg', 'png', 'pdf'],
     'barangays' => [
